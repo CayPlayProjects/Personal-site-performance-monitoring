@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Site Monitor</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --text: #e0e0e0;
+            --accent: #3b82f6;
+            --card: #1e1e1e;
+            --error: #ef4444;
+            --success: #22c55e;
+            --warning: #eab308;
+            --border: #2a2a2a;
+        }
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: var(--card);
+            padding: 32px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 420px;
+            border: 1px solid var(--border);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .lang-switch {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 16px;
+            gap: 8px;
+        }
+        .lang-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 4px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: 0.2s;
+        }
+        .lang-btn.active {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        h1 { 
+            font-size: 22px; 
+            font-weight: 500; 
+            margin: 0 0 24px 0; 
+            text-align: center; 
+        }
+        input {
+            width: 100%; 
+            padding: 14px; 
+            border: 1px solid var(--border);
+            background: var(--bg); 
+            color: #fff; 
+            border-radius: 8px;
+            box-sizing: border-box; 
+            margin-bottom: 16px; 
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input:focus { border-color: var(--accent); }
+        button.action-btn {
+            width: 100%; 
+            padding: 14px; 
+            border: none;
+            background: var(--accent); 
+            color: #fff; 
+            font-size: 15px;
+            font-weight: 500;
+            border-radius: 8px; 
+            cursor: pointer; 
+            transition: opacity 0.2s;
+        }
+        button.action-btn:hover { opacity: 0.9; }
+        
+        #results { margin-top: 24px; font-size: 14px; }
+        .metric { 
+            display: flex; 
+            justify-content: space-between; 
+            margin-bottom: 12px; 
+            padding-bottom: 12px; 
+            border-bottom: 1px solid var(--border); 
+        }
+        .metric:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .status { font-weight: 600; }
+        
+        .loader { 
+            text-align: center; 
+            color: #888; 
+            display: none; 
+            font-size: 14px;
+            margin-top: 16px;
+        }
+        .fallback-msg {
+            color: var(--warning);
+            font-size: 12px;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="lang-switch">
+            <button class="lang-btn active" onclick="setLang('ru')">RU</button>
+            <button class="lang-btn" onclick="setLang('en')">EN</button>
+        </div>
+        <h1 id="t-title">Проверка производительности</h1>
+        <input type="url" id="urlInput" placeholder="example.com" required>
+        <button id="t-btn" class="action-btn" onclick="checkSite()">Анализировать</button>
+        <div id="loader" class="loader">Анализ данных... (занимает ~10 секунд)</div>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Словари для смены языка
+        const i18n = {
+            ru: {
+                title: "Проверка производительности",
+                btn: "Анализировать",
+                loader: "Анализ данных... (занимает ~10 секунд)",
+                emptyUrl: "Пожалуйста, введите адрес сайта",
+                errPsBlocked: "Детальный анализ заблокирован защитой сайта. Проверяем базовую доступность...",
+                errDown: "Сайт недоступен, не существует или полностью блокирует запросы.",
+                statusLabel: "Состояние:",
+                scoreLabel: "Оценка производительности:",
+                fcpLabel: "Отрисовка контента (FCP):",
+                ttiLabel: "Время интерактивности (TTI):",
+                statusGood: "Работает отлично",
+                statusSlow: "Работает, но медленно",
+                statusBad: "Сайт сильно перегружен",
+                statusOnlineOnly: "Сайт работает (защита от сканирования)"
+            },
+            en: {
+                title: "Performance Monitor",
+                btn: "Analyze",
+                loader: "Analyzing data... (takes ~10 seconds)",
+                emptyUrl: "Please enter a website URL",
+                errPsBlocked: "Detailed analysis blocked by site protection. Checking basic availability...",
+                errDown: "Site is down, doesn't exist, or blocks all requests.",
+                statusLabel: "Status:",
+                scoreLabel: "Performance Score:",
+                fcpLabel: "First Contentful Paint (FCP):",
+                ttiLabel: "Time to Interactive (TTI):",
+                statusGood: "Works perfectly",
+                statusSlow: "Works, but slow",
+                statusBad: "Site is heavily overloaded",
+                statusOnlineOnly: "Site is online (scanning protected)"
+            }
+        };
+
+        let currentLang = 'ru';
+
+        function setLang(lang) {
+            currentLang = lang;
+            document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            document.getElementById('t-title').innerText = i18n[lang].title;
+            document.getElementById('t-btn').innerText = i18n[lang].btn;
+            document.getElementById('loader').innerText = i18n[lang].loader;
+            document.getElementById('results').innerHTML = ''; // Очищаем результаты при смене языка
+        }
+
+        async function checkSite() {
+            const urlInput = document.getElementById('urlInput').value.trim();
+            const resultsDiv = document.getElementById('results');
+            const loader = document.getElementById('loader');
+            const t = i18n[currentLang];
+
+            if (!urlInput) {
+                alert(t.emptyUrl);
+                return;
+            }
+
+            let url = urlInput;
+            if (!url.startsWith('http')) {
+                url = 'https://' + url;
+            }
+
+            resultsDiv.innerHTML = '';
+            loader.style.display = 'block';
+
+            try {
+                // Шаг 1: Попытка детального анализа через Google PageSpeed
+                const apiUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&category=PERFORMANCE`;
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+
+                if (!response.ok || data.error) {
+                    throw new Error('PAGESPEED_FAILED');
+                }
+
+                const lighthouse = data.lighthouseResult;
+                const performanceScore = Math.round(lighthouse.categories.performance.score * 100);
+                
+                let statusColor = 'var(--success)';
+                let statusText = t.statusGood;
+
+                if (performanceScore < 50) {
+                    statusColor = 'var(--error)';
+                    statusText = t.statusBad;
+                } else if (performanceScore < 80) {
+                    statusColor = 'var(--warning)';
+                    statusText = t.statusSlow;
+                }
+
+                resultsDiv.innerHTML = `
+                    <div class="metric"><span>${t.statusLabel}</span><span class="status" style="color: ${statusColor}">${statusText}</span></div>
+                    <div class="metric"><span>${t.scoreLabel}</span><span>${performanceScore} / 100</span></div>
+                    <div class="metric"><span>${t.fcpLabel}</span><span>${lighthouse.audits['first-contentful-paint'].displayValue}</span></div>
+                    <div class="metric"><span>${t.ttiLabel}</span><span>${lighthouse.audits['interactive'].displayValue}</span></div>
+                `;
+            } catch (error) {
+                // Шаг 2: Резервная проверка (Fallback), если PageSpeed заблокирован
+                resultsDiv.innerHTML = `<div class="fallback-msg">${t.errPsBlocked}</div>`;
+                
+                try {
+                    const checkUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+                    const checkRes = await fetch(checkUrl);
+                    const checkData = await checkRes.json();
+                    
+                    // Если прокси смог получить контент страницы (статус 200), значит сайт живой
+                    if (checkData.contents !== null) {
+                        resultsDiv.innerHTML = `
+                            <div class="metric"><span>${t.statusLabel}</span><span class="status" style="color: var(--success)">${t.statusOnlineOnly}</span></div>
+                        `;
+                    } else {
+                        throw new Error('DOWN');
+                    }
+                } catch (fallbackError) {
+                    resultsDiv.innerHTML = `<div class="metric" style="color: var(--error); border: none; justify-content: center; text-align: center;">⚠️ ${t.errDown}</div>`;
+                }
+            } finally {
+                loader.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
